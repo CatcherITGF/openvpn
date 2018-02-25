@@ -1,0 +1,23 @@
+- hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Add Docker’s official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Get Ubuntu version
+      command: lsb_release -cs
+      register: version
+
+    - name: Add Docker’s official reposytory
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu "{{ version.stdout }}" stable
+        state: present
+
+    - name: Install Docker CE
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: yes

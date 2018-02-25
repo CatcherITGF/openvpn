@@ -1,0 +1,82 @@
+---
+
+- hosts: all
+  gather_facts: no
+
+  pre_tasks:
+    - name: Install pip
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      with_items:
+        - python3-pip
+        - expect
+
+    - name: Install docker-py
+      pip:
+        name: "{{ item }}"
+      with_items:
+        - docker-py
+        - pexpect
+
+  tasks:
+    - name: Create a volume
+      command: docker volume create --name ovpn-data
+
+    - name: Generate server configuration
+      command: docker run -v ovpn-data:/etc/openvpn --rm kylemanna/openvpn ovpn_genconfig -u udp://{{ inventory_hostname }}
+
+    - name: Init PKI (this operation takes a few minutes)
+      shell: |
+        set timeout -1
+        spawn docker run -v ovpn-data:/etc/openvpn --rm -it kylemanna/openvpn ovpn_initpki
+        match_max 100000
+        expect "*phrase:"
+        send -- "{{ secret_phrase }}\r"
+        expect "*phrase:"
+        send -- "{{ secret_phrase }}\r"
+        expect "*]:"
+        send -- "\r"
+        expect "*ca.key:"
+        send -- "{{ secret_phrase }}\r"
+        expect "*ca.key:"
+        send -- "{{ secret_phrase }}\r"
+        expect eof
+      args:
+        executable: /usr/bin/expect
+
+    - name: Run server
+      command: docker run --name ovpn --restart=always -v ovpn-data:/etc/openvpn -d -p 1194:1194/udp --cap-add=NET_ADMIN kylemanna/openvpn
+
+    - name: Create client
+      expect:
+        command: docker run -v ovpn-data:/etc/openvpn --rm -it kylemanna/openvpn easyrsa build-client-full {{ client_name }} nopass
+        responses:
+          (?i)ca.key: "{{ secret_phrase }}"
+      tags:
+        - client
+
+    - name: Generate client configuration
+      shell: docker run -v ovpn-data:/etc/openvpn --rm kylemanna/openvpn ovpn_getclient {{ client_name }} > {{ client_name }}.ovpn
+      tags:
+        - client
+
+    - name: Get configuration file
+      fetch:
+        src: "{{ client_name }}.ovpn"
+        dest: "../connections/{{ client_name }}.ovpn"
+        flat: yes
+      tags:
+        - client
+
+    - name: Stop container
+      command: docker stop ovpn
+      ignore_errors: yes
+      tags:
+        - reset
+
+    - name: System prune
+      command: docker system prune -a --volumes --force
+      tags:
+        - reset
