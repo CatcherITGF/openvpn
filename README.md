@@ -39,7 +39,7 @@ Client file will be in the connections folder
 $ make create-client
 ```
 
-Don't forget to change `clint_name` variable in `group_vars/all.yaml`
+Don't forget to change `client_name` variable in `group_vars/all.yaml`
 
 ### Reset
 

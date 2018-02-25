@@ -9,6 +9,3 @@ create-client:
 
 reset-vpn:
 	ansible-playbook playbooks/ovpn.yml -i inventory.ini --tags "reset"
-
-test:
-	ansible-playbook playbooks/ovpn.yml -i inventory.ini --tags "test"
